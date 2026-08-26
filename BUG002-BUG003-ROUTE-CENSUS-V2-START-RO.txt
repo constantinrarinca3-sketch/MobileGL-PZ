@@ -1,0 +1,69 @@
+MOBILEGL PZ — BUG002/BUG003 ROUTE CENSUS V2
+DIAGNOSTIC BOUNDED, FARA FIX DE RANDARE
+=========================================
+
+SCOP
+----
+Acest overlay inlocuieste diagnosticul invalid care:
+- accepta WeatherFX numai dupa tokeni lexicali rain/weather/snow;
+- accepta caii numai daca primitiva era GL_QUADS/GL_QUAD_STRIP/GL_POLYGON.
+
+V2 nu foloseste niciunul dintre aceste filtre. Colecteaza bounded:
+- toate programele observate si fingerprintul shaderelor;
+- toate modurile primitive intrate prin PZCompat;
+- o proba program/draw/FBO/blend/texturi la prima utilizare si apoi la 5 secunde;
+- ruta frontend -> backend -> native pentru probele selectate.
+
+Nu apeleaza glFinish sau glReadPixels si nu aplica niciun fix de randare.
+
+1. APLICA OVERLAY-UL
+--------------------
+Din radacina sursei exacte OPT-LAB-V3-022:
+
+  unzip -o MobileGL-PZ-BUG002-BUG003-ROUTE-CENSUS-V2-SOURCE-OVERLAY.zip
+  bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh
+  bash scripts/verify-mobilegl-pz-bug002-weather-quad-diag.sh
+
+Ambele trebuie sa afiseze PASS.
+
+2. GITHUB ACTIONS
+-----------------
+
+  git add CMakeLists.txt MobileGL scripts .github/workflows \
+    BUG002-BUG003-ROUTE-CENSUS-V2-START-RO.txt
+  git commit -m "Add BUG002 BUG003 route census V2"
+  git push
+  gh workflow run build-mobilegl-pz-bug002-weather-quad-diag.yml --ref main
+
+Artifactul rezultat se numeste:
+  MobileGLPZ-BUG002-BUG003-ROUTE-CENSUS-V2-run-<numar>
+
+Biblioteca este in:
+  result/libMobileGLPZ.so
+
+3. TESTE PE DEVICE
+------------------
+Se foloseste acelasi .so in doua porniri cold-start separate:
+
+WEATHER:
+  DRY aproximativ 20 secunde;
+  RAIN aproximativ 50 secunde;
+  SNOW aproximativ 50 secunde.
+
+HORSE:
+  intri direct la cai;
+  rotesti camera si reproduci defectul aproximativ 120 secunde.
+
+Tag logcat:
+  MGLPZ-BUGDIAG
+
+Marker init obligatoriu:
+  BUG004_ROUTE_CENSUS_ACTIVE
+
+Markerii utili sunt BUG004_PROGRAM_CENSUS, BUG004_COMPAT_ENTRY,
+BUG004_DRAW_SAMPLE, BUG004_VISIBLE_STATE si BUG004_NATIVE_SUBMIT.
+
+4. SIGURANTA
+------------
+Nu injecta fara backup verificat. Nu sterge backupul stable. Dupa cele doua
+sesiuni fa rollback. Acest overlay nu contine si nu modifica stable-ul.

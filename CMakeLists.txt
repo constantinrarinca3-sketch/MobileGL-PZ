@@ -46,7 +46,7 @@ option(MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING "Resolve and shadow-check 
 option(MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING "Restore and shadow-check sampler-object bindings only for units sampled by the current program" OFF)
 option(MOBILEPZ_PERF005_SAMPLER_TELEMETRY "Capture one bounded sampler-binding work summary for PERF-005 A/B validation" OFF)
 option(MOBILEPZ_OPT_LAB "Build the runtime-selectable MobileGL-PZ optimization laboratory" OFF)
-option(MOBILEPZ_BUG002_WFX_QUAD_DIAG "Build bounded observation-only WeatherFX and legacy-quad diagnostics" OFF)
+option(MOBILEPZ_BUG002_WFX_QUAD_DIAG "Build bounded observation-only BUG002/003 route census without lexical or primitive filters" OFF)
 set(MOBILEPZ_OPT_LAB_BUILD_VARIANT "UNSPECIFIED" CACHE STRING
     "OPT-LAB compile-time variant name embedded in proof records")
 set(MOBILEPZ_OPT_LAB_BUILD_ID "UNSTAMPED" CACHE STRING

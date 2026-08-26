@@ -10,14 +10,16 @@
 #include <MG_State/GLState/Core.h>
 #include <MG_State/GLState/ProgramState/ProgramObject.h>
 #include <MG_State/GLState/TextureState/TextureObject.h>
+#include <chrono>
 
 namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
-    constexpr Uint32 kSchema = 1;
-    constexpr SizeT kProgramLimit = 96;
-    constexpr SizeT kQuadSignatureLimit = 64;
-    constexpr SizeT kQuadProgramReserveLimit = 32;
-    constexpr Uint32 kQuadDetailedEventLimit = 96;
-    constexpr Uint32 kWeatherEventLimit = 48;
+    constexpr Uint32 kSchema = 2;
+    constexpr SizeT kProgramLimit = 256;
+    constexpr SizeT kQuadSignatureLimit = 256;
+    constexpr SizeT kQuadProgramReserveLimit = 128;
+    constexpr Uint32 kQuadDetailedEventLimit = 384;
+    constexpr Uint32 kWeatherEventLimit = 512;
+    constexpr Uint64 kSampleIntervalMs = 5000;
     constexpr Uint32 kNativeLinesPerDraw = 8;
     constexpr Uint32 kAttributeLineLimit = 16;
     constexpr Uint32 kTextureLineLimit = 4;
@@ -50,6 +52,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         Bool layoutAccepted = false;
         Bool weatherCandidate = false;
         std::atomic<Uint32> weatherEvents{0};
+        std::atomic<Uint64> lastSampleMs{0};
     };
 
     struct LastUse {
@@ -101,6 +104,11 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         std::vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
         __android_log_print(ANDROID_LOG_WARN, "MGLPZ-BUGDIAG", "%s", buffer);
+    }
+
+    inline Uint64 NowMs() {
+        return static_cast<Uint64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
     }
 
     inline Uint64 HashBytes(Uint64 hash, const void* data, SizeT size) {
@@ -201,7 +209,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             if (expected == lifetime) return &record;
         }
         if (!g_programCapLogged.exchange(true)) {
-            Log("BUG002_PROGRAM_CAP schema=%u limit=%zu further_programs=unclassified", kSchema, kProgramLimit);
+            Log("BUG004_PROGRAM_CAP schema=%u limit=%zu further_programs=unclassified", kSchema, kProgramLimit);
         }
         return nullptr;
     }
@@ -239,23 +247,23 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         record->shaderFingerprint = fingerprint;
         record->tokenMask = tokens;
         record->layoutAccepted = hasPosition && hasUv;
-        record->weatherCandidate = (tokens & kDirectWeatherMask) != 0;
+        // Schema 1 incorrectly discarded programs without lexical weather
+        // tokens. Schema 2 keeps the tokens only as evidence and samples every
+        // program/route without using them as a gate.
+        record->weatherCandidate = true;
 
         char tokenText[256];
         FormatTokens(tokens, tokenText, sizeof(tokenText));
-        Log("BUG002_PROGRAM_CLASSIFY schema=%u program=%u lifetime=%llu shader_fp=%016llx "
+        Log("BUG004_PROGRAM_CENSUS schema=%u program=%u lifetime=%llu shader_fp=%016llx "
             "tokens=0x%08x token_names=%s match=%u reason=%s attrs=%d pos=%u uv=%u color=%u "
             "first_route=%s mode=0x%x count=%d",
             kSchema, record->external, static_cast<unsigned long long>(program->GetLifetimeId()),
             static_cast<unsigned long long>(fingerprint), tokens, tokenText,
             record->weatherCandidate ? 1u : 0u,
-            record->weatherCandidate ? "weather_token" : "no_weather_token",
+            "route_census_no_lexical_filter",
             attributeCount, hasPosition ? 1u : 0u, hasUv ? 1u : 0u, hasColor ? 1u : 0u,
             firstRoute, firstMode, firstCount);
-        // No-match programs only consume the single census line above. Full
-        // layout names are reserved for direct lexical WeatherFX candidates.
-        if (!record->weatherCandidate) return record;
-        Log("BUG002_LAYOUT_DECISION schema=%u program=%u lifetime=%llu attrs=%d pos=%u uv=%u color=%u "
+        Log("BUG004_PROGRAM_LAYOUT schema=%u program=%u lifetime=%llu attrs=%d pos=%u uv=%u color=%u "
             "decision=%s reason=%s",
             kSchema, record->external, static_cast<unsigned long long>(program->GetLifetimeId()), attributeCount,
             hasPosition ? 1u : 0u, hasUv ? 1u : 0u, hasColor ? 1u : 0u,
@@ -266,7 +274,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
                                               kAttributeLineLimit);
         for (Uint32 i = 0; i < lines; ++i) {
             const String& name = program->GetActiveAttribName(i);
-            Log("BUG002_LAYOUT_ATTR schema=%u program=%u lifetime=%llu active_index=%u location=%d "
+            Log("BUG004_PROGRAM_ATTR schema=%u program=%u lifetime=%llu active_index=%u location=%d "
                 "type=0x%x size=%d name=%s name_fp=%016llx",
                 kSchema, record->external, static_cast<unsigned long long>(program->GetLifetimeId()), i,
                 program->GetAttributeLocation(name), program->GetActiveAttribType(i),
@@ -274,7 +282,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
                 static_cast<unsigned long long>(HashString(name)));
         }
         if (attributeCount > static_cast<Int>(kAttributeLineLimit)) {
-            Log("BUG002_LAYOUT_ATTR_CAP schema=%u program=%u lifetime=%llu logged=%u total=%d",
+            Log("BUG004_PROGRAM_ATTR_CAP schema=%u program=%u lifetime=%llu logged=%u total=%d",
                 kSchema, record->external, static_cast<unsigned long long>(program->GetLifetimeId()),
                 kAttributeLineLimit, attributeCount);
         }
@@ -308,7 +316,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             if (expected == signature) return false;
         }
         if (!g_quadCapLogged.exchange(true)) {
-            Log("BUG003_QUAD_CAP schema=%u limit=%zu further_signatures=suppressed", kSchema, kQuadSignatureLimit);
+            Log("BUG004_COMPAT_SIGNATURE_CAP schema=%u limit=%zu further_signatures=suppressed", kSchema, kQuadSignatureLimit);
         }
         return false;
     }
@@ -325,7 +333,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             if (expected == key) return false;
         }
         if (!g_quadProgramCapLogged.exchange(true)) {
-            Log("BUG003_QUAD_PROGRAM_CAP schema=%u limit=%zu further_programs=suppressed",
+            Log("BUG004_COMPAT_PROGRAM_CAP schema=%u limit=%zu further_programs=suppressed",
                 kSchema, kQuadProgramReserveLimit);
         }
         return false;
@@ -335,7 +343,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         const Uint32 event = g_quadDetailedEvents.fetch_add(1, std::memory_order_relaxed);
         if (event < kQuadDetailedEventLimit) return true;
         if (!g_quadEventCapLogged.exchange(true)) {
-            Log("BUG003_QUAD_EVENT_CAP schema=%u limit=%u further_details=suppressed counters_continue=1",
+            Log("BUG004_COMPAT_EVENT_CAP schema=%u limit=%u further_details=suppressed counters_continue=1",
                 kSchema, kQuadDetailedEventLimit);
         }
         return false;
@@ -343,7 +351,8 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
 
     inline void ObserveCompatQuad(const char* route, GLenum mode, GLsizei count, GLenum type,
                                   Bool indexed, Bool clientArray) {
-        if (!LegacyQuadMode(mode)) return;
+        // Schema 2 observes every PZCompat primitive. LegacyQuadMode remains
+        // evidence in the record, never a capture filter.
         const auto& current = MG_State::pGLContext ? MG_State::pGLContext->GetCurrentProgram()
                                                    : SharedPtr<MG_State::GLState::ProgramObject>{};
         const Uint64 lifetime = current ? current->GetLifetimeId() : 0;
@@ -353,15 +362,16 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         const Bool newSignature = ClaimQuadSignature(signature);
         const Bool capture = (newProgram || newSignature) && ClaimQuadDetailedEvent();
         if (capture && newProgram) {
-            Log("BUG003_QUAD_PROGRAM schema=%u route=%s program=%u lifetime=%llu first_quad=1 "
+            Log("BUG004_COMPAT_PROGRAM schema=%u route=%s program=%u lifetime=%llu first_route=1 "
                 "reserved_program_slot=1",
                 kSchema, route, external, static_cast<unsigned long long>(lifetime));
         }
         if (capture && newSignature) {
-            Log("BUG003_QUAD_ROUTE schema=%u stage=pzcompat route=%s program=%u lifetime=%llu "
-                "mode=0x%x count=%d indexed=%u type=0x%x client_array=%u outcome=observed_before_translation",
+            Log("BUG004_COMPAT_ENTRY schema=%u stage=pzcompat route=%s program=%u lifetime=%llu "
+                "mode=0x%x count=%d indexed=%u type=0x%x client_array=%u legacy_quad_mode=%u "
+                "outcome=observed_before_translation primitive_filter=none",
                 kSchema, route, external, static_cast<unsigned long long>(lifetime), mode, count,
-                indexed ? 1u : 0u, type, clientArray ? 1u : 0u);
+                indexed ? 1u : 0u, type, clientArray ? 1u : 0u, LegacyQuadMode(mode) ? 1u : 0u);
         }
         // Keep the compat handoff for every quad, but detailed route logging is
         // enabled only for a new signature or a program-reserved first quad.
@@ -380,7 +390,6 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
     };
 
     inline void ObserveRejectedPrimitive(const char* route, GLenum mode) {
-        if (!LegacyQuadMode(mode)) return;
         const auto& current = MG_State::pGLContext ? MG_State::pGLContext->GetCurrentProgram()
                                                    : SharedPtr<MG_State::GLState::ProgramObject>{};
         const Uint64 lifetime = current ? current->GetLifetimeId() : 0;
@@ -390,9 +399,11 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         const Bool newSignature = ClaimQuadSignature(signature);
         const Bool capture = (newProgram || newSignature) && ClaimQuadDetailedEvent();
         if (capture) {
-            Log("BUG003_QUAD_ROUTE schema=%u stage=frontend route=%s program=%u lifetime=%llu "
-                "mode=0x%x count=unknown outcome=rejected reason=primitive_mode_not_accepted",
-                kSchema, route, external, static_cast<unsigned long long>(lifetime), mode);
+            Log("BUG004_REJECTED_PRIMITIVE schema=%u stage=frontend route=%s program=%u lifetime=%llu "
+                "mode=0x%x count=unknown legacy_quad_mode=%u outcome=rejected "
+                "reason=primitive_mode_not_accepted",
+                kSchema, route, external, static_cast<unsigned long long>(lifetime), mode,
+                LegacyQuadMode(mode) ? 1u : 0u);
         }
         g_compatQuad = {};
     }
@@ -435,7 +446,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         const auto& fbo = MG_State::pGLContext->GetFramebufferBindingSlot(FramebufferTarget::Draw).GetBoundObject();
         const Uint fboName = fbo ? fbo->GetExternalIndex() : 0;
         const Bool fboComplete = !fbo || fbo->IsDefaultFramebuffer() || fbo->CheckCompleteness();
-        Log("BUG002_VISIBLE_STATE schema=%u seq=%llu program=%u lifetime=%llu fbo=%u fbo_complete=%u "
+        Log("BUG004_VISIBLE_STATE schema=%u seq=%llu program=%u lifetime=%llu fbo=%u fbo_complete=%u "
             "blend=%u src_rgb=%u dst_rgb=%u src_a=%u dst_a=%u eq_rgb=%u eq_a=%u "
             "depth=%u depth_write=%u depth_func=%u cull=%u cull_mode=%u cmask=%u%u%u%u "
             "viewport=%d,%d,%d,%d scissor=%u,%d,%d,%d,%d",
@@ -467,7 +478,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             const auto& unitSampler = textureUnit.GetSamplerObject();
             const auto& sampler = unitSampler ? unitSampler : (texture ? texture->GetSamplerObject() : nullptr);
             const Bool mipmapped = sampler && sampler->GetMipmapMode() != SamplerMipmapMode::None;
-            Log("BUG002_VISIBLE_TEXTURE schema=%u seq=%llu uniform=%s uniform_fp=%016llx type=0x%x unit=%d "
+            Log("BUG004_VISIBLE_TEXTURE schema=%u seq=%llu uniform=%s uniform_fp=%016llx type=0x%x unit=%d "
                 "target=%d texture=%u texture_lifetime=%llu complete=%u mip_complete=%u sampler=%u "
                 "sampler_lifetime=%llu min_filter=%d mip_filter=%d",
                 kSchema, static_cast<unsigned long long>(sequence), name.c_str(),
@@ -483,7 +494,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             ++textureLines;
         }
         if (textureLines == 0) {
-            Log("BUG002_VISIBLE_TEXTURE schema=%u seq=%llu sampler_uniforms=none", kSchema,
+            Log("BUG004_VISIBLE_TEXTURE schema=%u seq=%llu sampler_uniforms=none", kSchema,
                 static_cast<unsigned long long>(sequence));
         }
     }
@@ -495,7 +506,17 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         const auto& selected = MG_State::pGLContext->GetCurrentProgram();
         const auto& drawProgram = MG_State::pGLContext->GetProgramForDraw();
         ProgramRecord* record = ClassifyProgram(drawProgram, route, mode, count);
-        const Bool weather = record && record->weatherCandidate;
+        Bool weather = false;
+        if (record) {
+            const Uint64 now = NowMs();
+            Uint64 observed = record->lastSampleMs.load(std::memory_order_relaxed);
+            while (observed == 0 || (now >= observed && now - observed >= kSampleIntervalMs)) {
+                if (record->lastSampleMs.compare_exchange_weak(observed, now, std::memory_order_acq_rel)) {
+                    weather = true;
+                    break;
+                }
+            }
+        }
         const Bool quad = g_compatQuad.active && g_compatQuad.capture;
         if (!weather && !quad) {
             g_compatQuad = {};
@@ -506,11 +527,11 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             const Uint32 event = g_weatherEvents.fetch_add(1, std::memory_order_relaxed);
             if (event >= kWeatherEventLimit) {
                 if (!g_weatherCapLogged.exchange(true)) {
-                    Log("BUG002_EVENT_CAP schema=%u limit=%u further_weather_draws=suppressed",
+                    Log("BUG004_EVENT_CAP schema=%u limit=%u further_route_samples=suppressed",
                         kSchema, kWeatherEventLimit);
                 }
-                g_compatQuad = {};
-                return;
+                weather = false;
+                if (!quad) return;
             }
         }
 
@@ -526,25 +547,25 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
             ? MG_State::pGLContext->GetFramebufferBindingSlot(FramebufferTarget::Draw).GetBoundObject()->GetExternalIndex()
             : 0;
         if (weather) {
-            Log("BUG002_USE_TO_DRAW schema=%u seq=%llu use_seq=%llu selected_program=%u selected_lifetime=%llu "
+            Log("BUG004_USE_TO_DRAW schema=%u seq=%llu use_seq=%llu selected_program=%u selected_lifetime=%llu "
                 "draw_program=%u draw_lifetime=%llu same=%u route=%s",
                 kSchema, static_cast<unsigned long long>(sequence), static_cast<unsigned long long>(g_lastUse.sequence),
                 selectedExternal, static_cast<unsigned long long>(selectedLifetime), drawExternal,
                 static_cast<unsigned long long>(drawLifetime), selected == drawProgram ? 1u : 0u, route);
-            Log("BUG002_DRAW_ROUTE schema=%u seq=%llu stage=frontend_to_backend route=%s source_route=%s "
+            Log("BUG004_DRAW_SAMPLE schema=%u seq=%llu stage=frontend_to_backend route=%s source_route=%s "
                 "source_mode=0x%x submitted_mode=0x%x source_count=%d submitted_count=%d indexed=%u "
-                "instances=%d subdraws=%d fbo=%u",
+                "instances=%d subdraws=%d fbo=%u reason=periodic_5s primitive_filter=none",
                 kSchema, static_cast<unsigned long long>(sequence), route,
                 g_compatQuad.active ? g_compatQuad.route : route, sourceMode, mode, sourceCount, count,
                 indexed ? 1u : 0u, instances, subdraws, fbo);
         }
         if (quad) {
-            Log("BUG003_USE_TO_DRAW schema=%u seq=%llu use_seq=%llu selected_program=%u "
+            Log("BUG004_COMPAT_TO_DRAW schema=%u seq=%llu use_seq=%llu selected_program=%u "
                 "selected_lifetime=%llu draw_program=%u draw_lifetime=%llu same=%u route=%s",
                 kSchema, static_cast<unsigned long long>(sequence), static_cast<unsigned long long>(g_lastUse.sequence),
                 selectedExternal, static_cast<unsigned long long>(selectedLifetime), drawExternal,
                 static_cast<unsigned long long>(drawLifetime), selected == drawProgram ? 1u : 0u, route);
-            Log("BUG003_QUAD_ROUTE schema=%u seq=%llu stage=frontend_to_backend route=%s source_route=%s "
+            Log("BUG004_COMPAT_ROUTE schema=%u seq=%llu stage=frontend_to_backend route=%s source_route=%s "
                 "source_mode=0x%x submitted_mode=0x%x source_count=%d submitted_count=%d indexed=%u "
                 "instances=%d outcome=submitted_to_backend",
                 kSchema, static_cast<unsigned long long>(sequence), route,
@@ -552,7 +573,7 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
                 indexed ? 1u : 0u, instances);
         }
 
-        if (weather && record->weatherEvents.fetch_add(1, std::memory_order_relaxed) < 8) {
+        if (weather && record->weatherEvents.fetch_add(1, std::memory_order_relaxed) < 32) {
             LogVisibleState(sequence, drawProgram);
         }
         g_compatQuad = {};
@@ -578,13 +599,13 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
         if (!g_pending.active || g_pending.nativeLines >= kNativeLinesPerDraw) return;
         ++g_pending.nativeLines;
         if (g_pending.weather) {
-            Log("BUG002_DRAW_ROUTE schema=%u seq=%llu stage=native route=%s source_mode=0x%x native_mode=0x%x "
+            Log("BUG004_NATIVE_SUBMIT schema=%u seq=%llu stage=native route=%s source_mode=0x%x native_mode=0x%x "
                 "source_count=%d native_count=%d indexed=%u instances=%d subdraw=%d backend_program=%u",
                 kSchema, static_cast<unsigned long long>(g_pending.sequence), route, g_pending.sourceMode, mode,
                 g_pending.sourceCount, count, indexed ? 1u : 0u, instances, subdraw, backendProgram);
         }
         if (g_pending.quad) {
-            Log("BUG003_QUAD_ROUTE schema=%u seq=%llu stage=native route=%s source_mode=0x%x native_mode=0x%x "
+            Log("BUG004_COMPAT_NATIVE schema=%u seq=%llu stage=native route=%s source_mode=0x%x native_mode=0x%x "
                 "source_count=%d native_count=%d indexed=%u instances=%d subdraw=%d backend_program=%u "
                 "outcome=native_submit",
                 kSchema, static_cast<unsigned long long>(g_pending.sequence), route, g_pending.sourceMode, mode,
@@ -593,7 +614,8 @@ namespace MobileGL::MG_Util::BUGWeatherQuadDiag {
     }
 
     inline void EmitInitMarker() {
-        Log("BUG002_DIAG_ACTIVE schema=%u base=OPT-LAB-V3-022 weather=on quad=on observation_only=1 "
+        Log("BUG004_ROUTE_CENSUS_ACTIVE schema=%u base=OPT-LAB-V3-022 weather_filter=none "
+            "primitive_filter=none observation_only=1 "
             "base_source_id=c63202c01d21b897a0802578f383ed2c5f46cdf09fcf86ccf95b6146d3d0d91f "
             "target=com.zomdroid.mglpz2 "
             "render_fix=none program_limit=%zu weather_event_limit=%u quad_signature_limit=%zu "

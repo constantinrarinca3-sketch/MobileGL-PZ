@@ -1,4 +1,4 @@
-name: Build BUG002 Weather + Quad Diagnostic
+name: Build BUG002 BUG003 Route Census V2
 
 on:
   workflow_dispatch:
@@ -81,7 +81,7 @@ jobs:
           source_id="$(sed -n 's/^DIAG_SOURCE_ID=//p' ci-output/build.log | tail -n 1)"
           build_id="$(sed -n 's/^DIAG_BUILD_ID=//p' ci-output/build.log | tail -n 1)"
           {
-            echo "MobileGL PZ BUG-002 WeatherFX + BUG-003 Quad diagnostic"
+            echo "MobileGL PZ BUG-002/003 route census V2"
             echo "base=OPT-LAB-V3-022"
             echo "base_source_id=c63202c01d21b897a0802578f383ed2c5f46cdf09fcf86ccf95b6146d3d0d91f"
             echo "variant=NOLTO"
@@ -106,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MobileGLPZ-BUG002-WQ-DIAG-run-${{ github.run_number }}
+          name: MobileGLPZ-BUG002-BUG003-ROUTE-CENSUS-V2-run-${{ github.run_number }}
           path: ci-output/
           if-no-files-found: warn
           retention-days: 3

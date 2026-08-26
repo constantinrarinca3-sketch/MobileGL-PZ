@@ -20,9 +20,10 @@ need_source 'MOBILEGL_LOG_ACTIVE_LEVEL=MOBILEGL_LOG_LEVEL_FATAL' \
     'scripts/build-mobilegl-pz-bug002-weather-quad-diag-android.sh'
 
 DIAG_HEADER='MobileGL/MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h'
-for marker in BUG002_DIAG_ACTIVE BUG002_PROGRAM_CLASSIFY BUG002_LAYOUT_DECISION \
-              BUG002_USE_TO_DRAW BUG002_DRAW_ROUTE BUG002_VISIBLE_STATE \
-              BUG003_QUAD_PROGRAM BUG003_USE_TO_DRAW BUG003_QUAD_ROUTE; do
+for marker in BUG004_ROUTE_CENSUS_ACTIVE BUG004_PROGRAM_CENSUS BUG004_PROGRAM_LAYOUT \
+              BUG004_USE_TO_DRAW BUG004_DRAW_SAMPLE BUG004_VISIBLE_STATE \
+              BUG004_COMPAT_PROGRAM BUG004_COMPAT_ENTRY BUG004_COMPAT_ROUTE \
+              BUG004_NATIVE_SUBMIT; do
     need_source "$marker" "$DIAG_HEADER"
 done
 need_source 'ANDROID_LOG_WARN, "MGLPZ-BUGDIAG"' "$DIAG_HEADER"
@@ -55,8 +56,9 @@ if [[ -n "$ELF" ]]; then
     command -v readelf >/dev/null 2>&1 || fail 'readelf-missing'
     readelf -h "$ELF" | grep -Fq 'Machine:                           AArch64' || fail 'elf-not-aarch64'
     readelf -d "$ELF" | grep -Fq '[libMobileGLPZ.so]' || fail 'soname-mismatch'
-    strings "$ELF" | grep -Fq 'BUG002_DIAG_ACTIVE' || fail 'elf-weather-marker-missing'
-    strings "$ELF" | grep -Fq 'BUG003_QUAD_ROUTE' || fail 'elf-quad-marker-missing'
+    strings "$ELF" | grep -Fq 'BUG004_ROUTE_CENSUS_ACTIVE' || fail 'elf-init-marker-missing'
+    strings "$ELF" | grep -Fq 'BUG004_DRAW_SAMPLE' || fail 'elf-draw-marker-missing'
+    strings "$ELF" | grep -Fq 'BUG004_COMPAT_ENTRY' || fail 'elf-compat-marker-missing'
     strings "$ELF" | grep -Fq 'MGLPZ-BUGDIAG' || fail 'elf-log-tag-missing'
 fi
 
