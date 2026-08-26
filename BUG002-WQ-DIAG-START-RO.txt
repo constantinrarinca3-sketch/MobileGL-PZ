@@ -1,0 +1,73 @@
+MOBILEGL PZ - BUG-002 WEATHERFX + BUG-003 CAI/QUAD
+DIAGNOSTIC BOUNDED, FARA FIX DE RANDARE
+
+BAZA:
+  OPT-LAB V3-022 exact
+  base source ID: c63202c01d21b897a0802578f383ed2c5f46cdf09fcf86ccf95b6146d3d0d91f
+  PZF23D4: ON
+  PZF16: OFF
+  target: com.zomdroid.mglpz2
+
+1. APLICA PACHETUL
+
+In Termux:
+
+  cd ~/mobilegl-work/MobileGL-PZ-OPT-LAB-V3-022-EXACT-SOURCE-2026-08-25
+  unzip -o "/storage/emulated/0/Download/GitHub Actions/MobileGL-PZ-BUG002-WQ-DIAG-SOURCE-OVERLAY.zip"
+  bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh
+  bash scripts/verify-mobilegl-pz-bug002-weather-quad-diag.sh
+
+Ambele comenzi trebuie sa afiseze PASS.
+
+2. TRIMITE MODIFICAREA IN REPOSITORY-UL PRIVAT
+
+  git status --short
+  git add CMakeLists.txt MobileGL scripts .github/workflows BUG002-WQ-DIAG-START-RO.txt
+  git commit -m "Add bounded WeatherFX and horse quad diagnostic"
+  git push
+
+3. PORNESTE BUILDUL NOLTO
+
+  gh workflow run build-mobilegl-pz-bug002-weather-quad-diag.yml --ref main
+  gh run list --workflow build-mobilegl-pz-bug002-weather-quad-diag.yml --limit 1
+
+Pentru urmarire, inlocuieste RUN_ID cu ID-ul afisat:
+
+  gh run watch RUN_ID --exit-status
+
+Pentru descarcare dupa succes:
+
+  mkdir -p "/storage/emulated/0/Download/GitHub Actions/BUG002-WQ-DIAG"
+  gh run download RUN_ID \
+    --dir "/storage/emulated/0/Download/GitHub Actions/BUG002-WQ-DIAG"
+
+Biblioteca va fi in subdirectorul artifactului, la result/libMobileGLPZ.so.
+
+4. CE COLECTAM PE TABLETA
+
+Se foloseste acelasi .so in doua porniri separate, ca limitele sa se reseteze:
+
+  SESIUNEA WEATHER:
+    cold start in aceeasi lume;
+    scena DRY scurta;
+    activezi RAIN/SNOW;
+    confirmi separat ce vezi.
+
+  SESIUNEA HORSE:
+    force-stop/cold start nou;
+    intri direct in scena cu cai;
+    rotesti camera si reproduci problema de quad.
+
+Logcat se filtreaza numai dupa tagul:
+
+  MGLPZ-BUGDIAG
+
+Markerii WeatherFX sunt BUG002_*; markerii pentru cai/quad sunt BUG003_*.
+Nu se folosesc glFinish, glReadPixels sau log nelimitat per draw.
+
+5. SIGURANTA
+
+Nu injecta fara backup verificat. Nu sterge backupul stable. Dupa cele doua
+sesiuni, fa rollback imediat la stable/backup. Pachetul exact de
+injectare/colectare va reutiliza metoda rish/Shizuku deja functionala pe tableta;
+trimite pachetul vechi de injectare pentru a-i pastra comenzile si permisiunile.

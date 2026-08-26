@@ -10,6 +10,9 @@
 #include "../Texture/GL_Texture.h"
 #include "../VertexArray/GL_VertexArray.h"
 #include <MG_State/GLState/Core.h>
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 #ifdef MOBILEPZ_PZF15_TEXTURE_COMBINER_SUBMISSION_TRACE
 #include <MG_Util/Texture/PZF14ClearToDetachState.h>
 #include <thread>
@@ -1032,6 +1035,10 @@ void main() {
             const SavedBindings saved = SaveBindings();
             GLImpl::ActiveTexture(GL_TEXTURE0);
             GLImpl::UseProgram(state.resources.program);
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+            MG_Util::BUGWeatherQuadDiag::ScopedCompatQuad bugQuadScope(
+                "BeginEnd", state.beginMode, static_cast<GLsizei>(state.vertices.size()), 0, false, false);
+#endif
             GLImpl::BindVertexArray(state.resources.vao);
             GLImpl::BindBuffer(GL_ARRAY_BUFFER, state.resources.vbo);
             GLImpl::BufferData(GL_ARRAY_BUFFER,
@@ -1687,6 +1694,10 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawArrays", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+        MG_Util::BUGWeatherQuadDiag::ScopedCompatQuad bugQuadScope(
+            "PZCompat::DrawArrays", mode, count, 0, false, state.clientVertex.enabled);
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchArrays(first, count)) {
@@ -1727,6 +1738,10 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawElements", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+        MG_Util::BUGWeatherQuadDiag::ScopedCompatQuad bugQuadScope(
+            "PZCompat::DrawElements", mode, count, type, true, state.clientVertex.enabled);
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchElements(count, type, indices)) {
@@ -1768,6 +1783,10 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawRangeElements", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+        MG_Util::BUGWeatherQuadDiag::ScopedCompatQuad bugQuadScope(
+            "PZCompat::DrawRangeElements", mode, count, type, true, state.clientVertex.enabled);
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchRangeElements(

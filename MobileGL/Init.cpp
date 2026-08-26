@@ -19,6 +19,9 @@
 #include <MG_Util/Async/ShaderCompilePool.h>
 #include <MG_Util/Debug/AbortTrace.h>
 #include <MG_Util/ShaderTranspiler/ShaderCompiler.h>
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 
 #include <atomic>
 #include <mutex>
@@ -109,6 +112,9 @@ namespace MobileGL {
         MG_ConfigLoader::Init();
 #ifdef MOBILEPZ_OPT_LAB
         PZOptLab::Initialize();
+#endif
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+        MG_Util::BUGWeatherQuadDiag::EmitInitMarker();
 #endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         MGLOG_I("MOBILEGL_PZ_V1_FINAL_REPAIRED_ACTIVE schema=5 "

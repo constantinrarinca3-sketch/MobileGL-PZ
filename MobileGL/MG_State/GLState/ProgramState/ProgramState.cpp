@@ -7,6 +7,9 @@
 // End of Source File Header
 
 #include "ProgramState.h"
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 
 namespace MobileGL::MG_State::GLState {
     Uint ProgramState::CreateProgram() {
@@ -81,6 +84,9 @@ namespace MobileGL::MG_State::GLState {
                 DestroyProgramSlot(previousName);
             }
         }
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+        MG_Util::BUGWeatherQuadDiag::OnUseProgram(m_currentProgram);
+#endif
     }
 
     Uint ProgramState::CreateShader(ShaderStage stage) {

@@ -46,6 +46,7 @@ option(MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING "Resolve and shadow-check 
 option(MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING "Restore and shadow-check sampler-object bindings only for units sampled by the current program" OFF)
 option(MOBILEPZ_PERF005_SAMPLER_TELEMETRY "Capture one bounded sampler-binding work summary for PERF-005 A/B validation" OFF)
 option(MOBILEPZ_OPT_LAB "Build the runtime-selectable MobileGL-PZ optimization laboratory" OFF)
+option(MOBILEPZ_BUG002_WFX_QUAD_DIAG "Build bounded observation-only WeatherFX and legacy-quad diagnostics" OFF)
 set(MOBILEPZ_OPT_LAB_BUILD_VARIANT "UNSPECIFIED" CACHE STRING
     "OPT-LAB compile-time variant name embedded in proof records")
 set(MOBILEPZ_OPT_LAB_BUILD_ID "UNSTAMPED" CACHE STRING
@@ -70,6 +71,18 @@ if (MOBILEPZ_PERF005_SAMPLER_TELEMETRY AND
     NOT MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING)
     message(FATAL_ERROR
         "PERF-005 telemetry requires the cumulative PERF-002/003 base")
+endif()
+
+if (MOBILEPZ_BUG002_WFX_QUAD_DIAG)
+    if (NOT ANDROID OR NOT MOBILEGL_PZCOMPAT OR NOT MOBILEPZ_V1_CANDIDATE OR
+        NOT MOBILEPZ_PZF23D4_CUSTOM_ALPHA_TEST_FAMILY OR NOT MOBILEPZ_OPT_LAB)
+        message(FATAL_ERROR
+            "BUG002/003 diagnostic requires Android + PZCompat + V1 + PZF23D4 + OPT-LAB")
+    endif()
+    if (MOBILEPZ_PZF16_QUAD4_SUBMISSION_FIX)
+        message(FATAL_ERROR
+            "BUG002/003 is observation-only: PZF16 quad rendering fix must remain OFF")
+    endif()
 endif()
 
 if (ANDROID)
@@ -825,6 +838,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
         $<$<BOOL:${MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING}>:MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING=1>
         $<$<BOOL:${MOBILEPZ_PERF005_SAMPLER_TELEMETRY}>:MOBILEPZ_PERF005_SAMPLER_TELEMETRY=1>
         $<$<BOOL:${MOBILEPZ_OPT_LAB}>:MOBILEPZ_OPT_LAB=1>
+        $<$<BOOL:${MOBILEPZ_BUG002_WFX_QUAD_DIAG}>:MOBILEPZ_BUG002_WFX_QUAD_DIAG=1>
         MOBILEPZ_OPT_LAB_BUILD_VARIANT="${MOBILEPZ_OPT_LAB_BUILD_VARIANT}"
         MOBILEPZ_OPT_LAB_BUILD_ID="${MOBILEPZ_OPT_LAB_BUILD_ID}"
 )

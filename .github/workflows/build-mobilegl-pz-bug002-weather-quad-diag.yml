@@ -1,0 +1,112 @@
+name: Build BUG002 Weather + Quad Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobilegl-pz-bug002-wq-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: NOLTO diagnostic / arm64-v8a
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Descarcă sursa
+        uses: actions/checkout@v6
+
+      - name: Instalează Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Instalează NDK și CMake exacte
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.3.13750724" "cmake;3.22.1"
+
+      - name: Verifică baza și instrumentarea bounded
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh
+          bash scripts/verify-mobilegl-pz-bug002-weather-quad-diag.sh
+
+      - name: Compilează și verifică libMobileGLPZ.so
+        shell: bash
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.3.13750724
+          MGLPZ_BUILD_JOBS: "4"
+        run: |
+          set -euo pipefail
+          export PATH="${ANDROID_SDK_ROOT}/cmake/3.22.1/bin:${PATH}"
+          mkdir -p ci-output/result
+
+          bash scripts/build-mobilegl-pz-bug002-weather-quad-diag-android.sh \
+            "${GITHUB_WORKSPACE}/build-ci" \
+            2>&1 | tee ci-output/build.log
+
+          built_so="${GITHUB_WORKSPACE}/build-ci/libMobileGLPZ.so"
+          test -f "${built_so}"
+          cp "${built_so}" ci-output/result/libMobileGLPZ.so
+
+          tool_bin="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "${tool_bin}/llvm-strip" --strip-all ci-output/result/libMobileGLPZ.so
+
+          bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh \
+            ci-output/result/libMobileGLPZ.so \
+            | tee ci-output/result/VERIFY-OPT-LAB.txt
+          bash scripts/verify-mobilegl-pz-bug002-weather-quad-diag.sh \
+            ci-output/result/libMobileGLPZ.so \
+            | tee ci-output/result/VERIFY-BUG002-WQ.txt
+
+          if "${tool_bin}/llvm-readelf" -d ci-output/result/libMobileGLPZ.so \
+            | grep -Fq 'libc++_shared.so'; then
+            echo "EROARE: buildul depinde de libc++_shared.so." >&2
+            exit 1
+          fi
+
+          "${tool_bin}/llvm-readelf" -h -d -n \
+            ci-output/result/libMobileGLPZ.so \
+            > ci-output/result/ELF-INFO.txt
+          "${tool_bin}/llvm-readelf" -l \
+            ci-output/result/libMobileGLPZ.so \
+            > ci-output/result/ELF-PROGRAM-HEADERS.txt
+
+          source_id="$(sed -n 's/^DIAG_SOURCE_ID=//p' ci-output/build.log | tail -n 1)"
+          build_id="$(sed -n 's/^DIAG_BUILD_ID=//p' ci-output/build.log | tail -n 1)"
+          {
+            echo "MobileGL PZ BUG-002 WeatherFX + BUG-003 Quad diagnostic"
+            echo "base=OPT-LAB-V3-022"
+            echo "base_source_id=c63202c01d21b897a0802578f383ed2c5f46cdf09fcf86ccf95b6146d3d0d91f"
+            echo "variant=NOLTO"
+            echo "render_fix=NONE"
+            echo "pzf16=OFF"
+            echo "abi=arm64-v8a"
+            echo "android_api=26"
+            echo "ndk=27.3.13750724"
+            echo "cmake=3.22.1"
+            echo "git_commit=${GITHUB_SHA}"
+            echo "source_id=${source_id}"
+            echo "build_id=${build_id}"
+            echo "target=com.zomdroid.mglpz2"
+          } > ci-output/result/BUILD-INFO.txt
+
+          (
+            cd ci-output/result
+            sha256sum libMobileGLPZ.so > SHA256SUMS.txt
+          )
+
+      - name: Încarcă rezultatul sau jurnalul de eroare
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MobileGLPZ-BUG002-WQ-DIAG-run-${{ github.run_number }}
+          path: ci-output/
+          if-no-files-found: warn
+          retention-days: 3

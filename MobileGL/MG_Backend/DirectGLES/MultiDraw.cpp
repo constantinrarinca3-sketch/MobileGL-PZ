@@ -9,11 +9,22 @@
 #include "MultiDraw.h"
 #include "Managers.h"
 #include <MG_State/GLState/Core.h>
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 #include <cstring>
 #include <limits>
 
 namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
     using MG_Config::GLESMultiDrawMode;
+
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#define MOBILEPZ_BUGDIAG_MULTINATIVE(route, drawMode, drawCount, drawInstances, drawSubdraw) \
+    MG_Util::BUGWeatherQuadDiag::NativeSubmit(route, drawMode, drawCount, drawInstances, true,    \
+                                              drawSubdraw, PrgramImpl::g_lastUsedBackendProgramId)
+#else
+#define MOBILEPZ_BUGDIAG_MULTINATIVE(route, drawMode, drawCount, drawInstances, drawSubdraw)
+#endif
 
     namespace {
         // ---------------------------------------------------------------------------
@@ -369,6 +380,8 @@ namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
             PZF14BeforeRawDraw("MultiDrawElementsBaseVertexEXT", mode, 0, 1, true, drawcount);
 #endif
+            MOBILEPZ_BUGDIAG_MULTINATIVE("glMultiDrawElementsBaseVertexEXT", mode,
+                                         drawcount > 0 ? count[0] : 0, 1, 0);
             g_GLESFuncs.glMultiDrawElementsBaseVertexEXT(mode, count, type, indices, drawcount, baseVertices);
             NoteTierExecuted(GLESMultiDrawMode::Ext);
             return true;
@@ -420,6 +433,8 @@ namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                 PZF14BeforeRawDraw("MultiDrawElementsIndirectEXT", mode, 0, 1, true, drawcount);
 #endif
+                MOBILEPZ_BUGDIAG_MULTINATIVE("glMultiDrawElementsIndirectEXT", mode,
+                                             drawcount > 0 ? count[0] : 0, 1, 0);
                 g_GLESFuncs.glMultiDrawElementsIndirectEXT(mode, type, reinterpret_cast<const void*>(commandBase),
                                                            drawcount, 0);
             } else {
@@ -430,6 +445,7 @@ namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                     PZF14BeforeRawDraw("MultiDrawElementsIndirectLoop", mode, count[i], 1, true, 1);
 #endif
+                    MOBILEPZ_BUGDIAG_MULTINATIVE("glDrawElementsIndirect", mode, count[i], 1, i);
                     g_GLESFuncs.glDrawElementsIndirect(mode, type, reinterpret_cast<const void*>(commandOffset));
                 }
                 if (feedDrawID) SetCurrentDrawID(0);
@@ -454,6 +470,7 @@ namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                 PZF14BeforeRawDraw("MultiDrawElementsBaseVertexLoop", mode, count[i], 1, true, 1);
 #endif
+                MOBILEPZ_BUGDIAG_MULTINATIVE("glDrawElementsBaseVertex", mode, count[i], 1, i);
                 g_GLESFuncs.glDrawElementsBaseVertex(mode, count[i], type, indices[i],
                                                      basevertex ? basevertex[i] : 0);
             }
@@ -530,6 +547,7 @@ namespace MobileGL::MG_Backend::DirectGLES::MultiDrawImpl {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                 PZF14BeforeRawDraw("MultiDrawElementsRebasedLoop", mode, count[i], 1, true, 1);
 #endif
+                MOBILEPZ_BUGDIAG_MULTINATIVE("glDrawElements", mode, count[i], 1, i);
                 g_GLESFuncs.glDrawElements(mode, count[i], GL_UNSIGNED_INT,
                                            reinterpret_cast<const void*>(indexBase + cursor * sizeof(Uint32)));
                 cursor += static_cast<SizeT>(count[i]);
@@ -889,6 +907,8 @@ void main() {
             PZF14BeforeRawDraw("MultiDrawElementsComputeFlattened", mode,
                                static_cast<GLsizei>(flattened.indexCount), 1, true, drawcount);
 #endif
+            MOBILEPZ_BUGDIAG_MULTINATIVE("glDrawElements-compute-flattened", mode,
+                                         static_cast<GLsizei>(flattened.indexCount), 1, 0);
             g_GLESFuncs.glDrawElements(mode, static_cast<GLsizei>(flattened.indexCount), GL_UNSIGNED_INT, nullptr);
             BufferImpl::BindBufferId(GL_ELEMENT_ARRAY_BUFFER, previousIndexBinding);
             return;

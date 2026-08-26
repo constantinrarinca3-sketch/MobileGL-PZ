@@ -12,8 +12,18 @@
 #include <MG_State/EGLState/Core.h>
 #include <MG_Backend/BackendObjects.h>
 #include "../Getter/GL_Getter.h"
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 
 namespace MobileGL::MG_Impl::GLImpl {
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#define MOBILEPZ_BUGDIAG_DRAW_SCOPE(drawMode, drawCount, drawInstances, drawIndexed, drawSubdraws) \
+    MG_Util::BUGWeatherQuadDiag::ScopedBackendDraw bugWeatherQuadScope(                         \
+        __func__, drawMode, drawCount, drawInstances, drawIndexed, drawSubdraws)
+#else
+#define MOBILEPZ_BUGDIAG_DRAW_SCOPE(drawMode, drawCount, drawInstances, drawIndexed, drawSubdraws)
+#endif
     static Bool ValidateProgramForExecution(const SharedPtr<MG_State::GLState::ProgramObject>& currentProgram,
                                             const char* functionName) {
         if (!currentProgram) {
@@ -153,6 +163,9 @@ namespace MobileGL::MG_Impl::GLImpl {
 
     static Bool ValidatePrimitiveModeForBackend(const char* functionName, GLenum mode) {
         if (!IsAcceptedPrimitiveMode(mode)) {
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+            MG_Util::BUGWeatherQuadDiag::ObserveRejectedPrimitive(functionName, mode);
+#endif
             MG_State::pGLContext->RecordError(
                 ErrorCode::InvalidEnum,
                 MakeUnique<GenericErrorInfo>("MG_Impl/GLImpl", functionName, "mode is not an accepted primitive type."));
@@ -314,6 +327,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, 1, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElements(mode, count, type, indices);
     }
 
@@ -322,6 +336,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count && drawcount > 0 ? count[0] : 0, 1, true, drawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawElements(mode, count, type, indices, drawcount);
     }
 
@@ -330,6 +345,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count && drawcount > 0 ? count[0] : 0, 1, true, drawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawElementsBaseVertex(mode, count, type, indices, drawcount,
                                                                           basevertex);
     }
@@ -338,6 +354,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, 1, false, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawArrays(mode, first, count);
     }
 
@@ -345,6 +362,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count && drawcount > 0 ? count[0] : 0, 1, false, drawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawArrays(mode, first, count, drawcount);
     }
 
@@ -353,6 +371,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, 1, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsBaseVertex(mode, count, type, indices, basevertex);
     }
 
@@ -361,6 +380,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, true, drawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawElementsIndirect(mode, type, indirect, drawcount, stride);
     }
 
@@ -368,6 +388,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, false, drawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawArraysIndirect(mode, indirect, drawcount, stride);
     }
 
@@ -376,6 +397,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, true, maxdrawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawElementsIndirectCount(mode, type, indirect, drawcount,
                                                                              maxdrawcount, stride);
     }
@@ -385,6 +407,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, false, maxdrawcount);
         MG_Backend::gBackendFunctionsTable.GL.MultiDrawArraysIndirectCount(mode, indirect, drawcount, maxdrawcount,
                                                                            stride);
     }
@@ -394,6 +417,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, 1, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawRangeElementsBaseVertex(mode, start, end, count, type, indices,
                                                                           basevertex);
     }
@@ -403,6 +427,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, 1, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawRangeElements(mode, start, end, count, type, indices);
     }
 
@@ -412,6 +437,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsInstancedBaseVertexBaseInstance(
             mode, count, type, indices, instancecount, basevertex, baseinstance);
     }
@@ -421,6 +447,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsInstancedBaseVertex(mode, count, type, indices, instancecount,
                                                                               basevertex);
     }
@@ -430,6 +457,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsInstancedBaseInstance(mode, count, type, indices,
                                                                                 instancecount, baseinstance);
     }
@@ -439,6 +467,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsInstanced(mode, count, type, indices, instancecount);
     }
 
@@ -446,6 +475,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, true, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawElementsIndirect(mode, type, indirect);
     }
     void DrawArraysInstancedBaseInstance_Backend(GLenum mode, GLint first, GLsizei count, GLsizei instancecount,
@@ -453,6 +483,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, false, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawArraysInstancedBaseInstance(mode, first, count, instancecount,
                                                                               baseinstance);
     }
@@ -461,6 +492,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, count, instancecount, false, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawArraysInstanced(mode, first, count, instancecount);
     }
 
@@ -468,6 +500,7 @@ namespace MobileGL::MG_Impl::GLImpl {
 #ifdef TRACY_ENABLE
         ZoneScopedC(TRACY_ZONECOLOR_BACKEND);
 #endif
+        MOBILEPZ_BUGDIAG_DRAW_SCOPE(mode, 0, 0, false, 1);
         MG_Backend::gBackendFunctionsTable.GL.DrawArraysIndirect(mode, indirect);
     }
 

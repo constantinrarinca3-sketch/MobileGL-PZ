@@ -30,6 +30,9 @@
 #include <MG_Util/Texture/PixelStoreProcessor.h>
 #include <Config.h>
 #include <PZOptLab.h>
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#include <MG_Util/PZDiagnostics/BUGWeatherQuadDiag.h>
+#endif
 #ifdef MOBILEPZ_PZF4_SAMPLE_SURVIVAL_TRACE
 #include "PZF4LifecycleState.h"
 #endif
@@ -77,6 +80,13 @@
 #endif
 
 namespace MobileGL::MG_Backend::DirectGLES {
+#ifdef MOBILEPZ_BUG002_WFX_QUAD_DIAG
+#define MOBILEPZ_BUGDIAG_NATIVE(route, drawMode, drawCount, drawInstances, drawIndexed, drawSubdraw) \
+    MG_Util::BUGWeatherQuadDiag::NativeSubmit(route, drawMode, drawCount, drawInstances, drawIndexed,  \
+                                              drawSubdraw, PrgramImpl::g_lastUsedBackendProgramId)
+#else
+#define MOBILEPZ_BUGDIAG_NATIVE(route, drawMode, drawCount, drawInstances, drawIndexed, drawSubdraw)
+#endif
     MG_External::EGLFunctionsTable g_EGLFuncs;
     MG_External::GLESFunctionsTable g_GLESFuncs;
     MG_External::GLESCapabilities g_GLESCapabilities;
@@ -4291,6 +4301,10 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                 PZF14BeforeRawDraw(label, mode, 0, 0, true, 1);
 #endif
+                DrawElementsIndirectCommand diagCommand{};
+                std::memcpy(&diagCommand, commandBytes + static_cast<SizeT>(i) * stride, sizeof(diagCommand));
+                MOBILEPZ_BUGDIAG_NATIVE(label, mode, static_cast<GLsizei>(diagCommand.count),
+                                        static_cast<GLsizei>(diagCommand.instanceCount), true, i);
                 g_GLESFuncs.glDrawElementsIndirect(mode, type, reinterpret_cast<const void*>(cmdByteOffset));
             }
         } else {
@@ -4308,6 +4322,8 @@ namespace MobileGL::MG_Backend::DirectGLES {
                 PZF14BeforeRawDraw(label, mode, static_cast<GLsizei>(cmd.count),
                                    static_cast<GLsizei>(cmd.instanceCount), true, 1);
 #endif
+                MOBILEPZ_BUGDIAG_NATIVE(label, mode, static_cast<GLsizei>(cmd.count),
+                                        static_cast<GLsizei>(cmd.instanceCount), true, i);
                 g_GLESFuncs.glDrawElementsInstancedBaseVertex(
                     mode, static_cast<GLsizei>(cmd.count), type, reinterpret_cast<const GLvoid*>(indexByteOffset),
                     static_cast<GLsizei>(cmd.instanceCount), cmd.baseVertex);
@@ -4352,6 +4368,10 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE
                 PZF14BeforeRawDraw(label, mode, 0, 0, false, 1);
 #endif
+                DrawArraysIndirectCommand diagCommand{};
+                std::memcpy(&diagCommand, commandBytes + static_cast<SizeT>(i) * stride, sizeof(diagCommand));
+                MOBILEPZ_BUGDIAG_NATIVE(label, mode, static_cast<GLsizei>(diagCommand.count),
+                                        static_cast<GLsizei>(diagCommand.instanceCount), false, i);
                 g_GLESFuncs.glDrawArraysIndirect(mode, reinterpret_cast<const void*>(cmdByteOffset));
             }
         } else {
@@ -4367,6 +4387,8 @@ namespace MobileGL::MG_Backend::DirectGLES {
                 PZF14BeforeRawDraw(label, mode, static_cast<GLsizei>(cmd.count),
                                    static_cast<GLsizei>(cmd.instanceCount), false, 1);
 #endif
+                MOBILEPZ_BUGDIAG_NATIVE(label, mode, static_cast<GLsizei>(cmd.count),
+                                        static_cast<GLsizei>(cmd.instanceCount), false, i);
                 g_GLESFuncs.glDrawArraysInstanced(mode, static_cast<GLint>(cmd.first),
                                                   static_cast<GLsizei>(cmd.count),
                                                   static_cast<GLsizei>(cmd.instanceCount));
@@ -4629,6 +4651,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices);
 #endif
         CheckPrimitiveRestartSupported(type);
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawElements", mode, count, 1, true, 0);
         g_GLESFuncs.glDrawElements(mode, count, type, indices);
     }
 
@@ -4652,6 +4675,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
         PZF3DrawProbe pzf3Probe(__func__, mode, count, 0,
                                 reinterpret_cast<const void*>(static_cast<SizeT>(first)));
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawArrays", mode, count, 1, false, 0);
         g_GLESFuncs.glDrawArrays(mode, first, count);
     }
 
@@ -4669,6 +4693,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF3_CROSS_FAMILY_TRACE
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices, 1, basevertex);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsBaseVertex", mode, count, 1, true, 0);
         g_GLESFuncs.glDrawElementsBaseVertex(mode, count, type, indices, basevertex);
         SetCurrentBaseVertex(0);
     }
@@ -4702,6 +4727,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
             PZF3DrawProbe pzf3Probe(__func__, mode, count[i], 0,
                                     reinterpret_cast<const void*>(static_cast<SizeT>(first[i])));
 #endif
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawArrays", mode, count[i], 1, false, i);
             g_GLESFuncs.glDrawArrays(mode, first[i], count[i]);
         }
         if (feedDrawID) SetCurrentDrawID(0);
@@ -4945,6 +4971,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF3_CROSS_FAMILY_TRACE
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices, 1, basevertex);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawRangeElementsBaseVertex", mode, count, 1, true, 0);
         g_GLESFuncs.glDrawRangeElementsBaseVertex(mode, start, end, count, type, indices, basevertex);
         SetCurrentBaseVertex(0);
     }
@@ -4958,6 +4985,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF3_CROSS_FAMILY_TRACE
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawRangeElements", mode, count, 1, true, 0);
         g_GLESFuncs.glDrawRangeElements(mode, start, end, count, type, indices);
     }
 
@@ -4989,9 +5017,12 @@ namespace MobileGL::MG_Backend::DirectGLES {
                                 basevertex, baseinstance);
 #endif
         if (UseNativeBaseInstance()) {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstancedBaseVertexBaseInstanceEXT", mode, count,
+                                    instancecount, true, 0);
             g_GLESFuncs.glDrawElementsInstancedBaseVertexBaseInstanceEXT(mode, count, type, indices, instancecount,
                                                                         basevertex, baseinstance);
         } else {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstancedBaseVertex", mode, count, instancecount, true, 0);
             g_GLESFuncs.glDrawElementsInstancedBaseVertex(mode, count, type, indices, instancecount, basevertex);
         }
         SetCurrentBaseVertex(0);
@@ -5009,6 +5040,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF3_CROSS_FAMILY_TRACE
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices, instancecount, basevertex);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstancedBaseVertex", mode, count, instancecount, true, 0);
         g_GLESFuncs.glDrawElementsInstancedBaseVertex(mode, count, type, indices, instancecount, basevertex);
         SetCurrentBaseVertex(0);
     }
@@ -5026,9 +5058,12 @@ namespace MobileGL::MG_Backend::DirectGLES {
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices, instancecount, 0, baseinstance);
 #endif
         if (UseNativeBaseInstance()) {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstancedBaseInstanceEXT", mode, count,
+                                    instancecount, true, 0);
             g_GLESFuncs.glDrawElementsInstancedBaseInstanceEXT(mode, count, type, indices, instancecount,
                                                               baseinstance);
         } else {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstanced", mode, count, instancecount, true, 0);
             g_GLESFuncs.glDrawElementsInstanced(mode, count, type, indices, instancecount);
         }
         SetCurrentBaseInstance(0);
@@ -5043,6 +5078,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
 #ifdef MOBILEPZ_PZF3_CROSS_FAMILY_TRACE
         PZF3DrawProbe pzf3Probe(__func__, mode, count, type, indices, instancecount);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawElementsInstanced", mode, count, instancecount, true, 0);
         g_GLESFuncs.glDrawElementsInstanced(mode, count, type, indices, instancecount);
     }
 
@@ -5084,8 +5120,11 @@ namespace MobileGL::MG_Backend::DirectGLES {
                                 instancecount, 0, baseinstance);
 #endif
         if (UseNativeBaseInstance()) {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawArraysInstancedBaseInstanceEXT", mode, count,
+                                    instancecount, false, 0);
             g_GLESFuncs.glDrawArraysInstancedBaseInstanceEXT(mode, first, count, instancecount, baseinstance);
         } else {
+            MOBILEPZ_BUGDIAG_NATIVE("glDrawArraysInstanced", mode, count, instancecount, false, 0);
             g_GLESFuncs.glDrawArraysInstanced(mode, first, count, instancecount);
         }
         SetCurrentBaseInstance(0);
@@ -5101,6 +5140,7 @@ namespace MobileGL::MG_Backend::DirectGLES {
         PZF3DrawProbe pzf3Probe(__func__, mode, count, 0,
                                 reinterpret_cast<const void*>(static_cast<SizeT>(first)), instancecount);
 #endif
+        MOBILEPZ_BUGDIAG_NATIVE("glDrawArraysInstanced", mode, count, instancecount, false, 0);
         g_GLESFuncs.glDrawArraysInstanced(mode, first, count, instancecount);
     }
 
