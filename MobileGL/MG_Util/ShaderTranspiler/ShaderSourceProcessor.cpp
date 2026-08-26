@@ -175,6 +175,79 @@ namespace {
         return tokens;
     }
 
+#ifdef MOBILEPZ_BUG002_WFX_FORCE_VISIBLE
+    bool EqualsAsciiInsensitive(const String& value, const char* expected) {
+        SizeT index = 0;
+        for (; expected[index] != '\0'; ++index) {
+            if (index >= value.size()) return false;
+            const auto left = static_cast<unsigned char>(value[index]);
+            const auto right = static_cast<unsigned char>(expected[index]);
+            if (std::tolower(left) != std::tolower(right)) return false;
+        }
+        return index == value.size();
+    }
+
+    Bool RewriteWeatherFxForceVisibleProbe(ShaderStage stage, String& source) {
+        if (stage != ShaderStage::Fragment) return false;
+        const Vector<CodeToken> tokens = TokenizeCode(source);
+        Bool hasDiffuse = false;
+        Bool hasFragColor = false;
+        Bool hasWeatherToken = false;
+        for (const auto& token : tokens) {
+            hasDiffuse = hasDiffuse || token.text == "DIFFUSE";
+            hasFragColor = hasFragColor || token.text == "gl_FragColor";
+            hasWeatherToken = hasWeatherToken ||
+                EqualsAsciiInsensitive(token.text, "rain") ||
+                EqualsAsciiInsensitive(token.text, "particle") ||
+                EqualsAsciiInsensitive(token.text, "fog");
+        }
+        if (!hasDiffuse || !hasFragColor || !hasWeatherToken) return false;
+
+        SizeT mainOpen = String::npos;
+        for (SizeT i = 0; i + 3 < tokens.size(); ++i) {
+            if (tokens[i].text != "void" || tokens[i + 1].text != "main" ||
+                tokens[i + 2].text != "(") {
+                continue;
+            }
+            SizeT cursor = i + 3;
+            Int parenDepth = 1;
+            while (cursor < tokens.size() && parenDepth > 0) {
+                if (tokens[cursor].text == "(") ++parenDepth;
+                if (tokens[cursor].text == ")") --parenDepth;
+                ++cursor;
+            }
+            if (parenDepth == 0 && cursor < tokens.size() &&
+                tokens[cursor].text == "{") {
+                mainOpen = cursor;
+                break;
+            }
+        }
+        if (mainOpen == String::npos) return false;
+
+        SizeT mainClose = String::npos;
+        Int braceDepth = 0;
+        for (SizeT i = mainOpen; i < tokens.size(); ++i) {
+            if (tokens[i].text == "{") ++braceDepth;
+            if (tokens[i].text == "}" && --braceDepth == 0) {
+                mainClose = i;
+                break;
+            }
+        }
+        if (mainClose == String::npos) return false;
+
+        source.insert(tokens[mainClose].begin,
+            "\n    // BUG-002 diagnostic only: prove WeatherFX geometry/fragments.\n"
+            "    gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);\n");
+        for (SizeT i = mainClose; i-- > mainOpen;) {
+            if (tokens[i].text == "discard") {
+                source.replace(tokens[i].begin, tokens[i].end - tokens[i].begin,
+                               "/* BUG002_WFX_DISCARD_DISABLED */");
+            }
+        }
+        return true;
+    }
+#endif
+
     bool IsIdentifierToken(const CodeToken& token) {
         if (token.text.empty() || !IsIdentifierStart(token.text.front())) {
             return false;
@@ -1666,6 +1739,15 @@ namespace MobileGL {
             void PreprocessShaderSource(ShaderStage stage, String& source, const CompileEnv& env) {
                 // Normalize while the inspector's source span still refers to the untouched input.
                 const ShaderLanguageInfo originalLanguage = InspectShaderLanguage(source);
+
+#ifdef MOBILEPZ_BUG002_WFX_FORCE_VISIBLE
+                if (RewriteWeatherFxForceVisibleProbe(stage, source)) {
+                    static std::atomic<Uint32> rewrites{0};
+                    const Uint32 serial = rewrites.fetch_add(1, std::memory_order_relaxed) + 1;
+                    MGLOG_W("MGLPZ_BUG002_WFX_FORCE_VISIBLE serial=%u color=magenta alpha=1 discard=disabled",
+                            serial);
+                }
+#endif
 
 #ifdef MOBILEPZ_PZF23D2_CHUNK_FRAGDEPTH_CLAMP
                 if (stage == ShaderStage::Fragment) {

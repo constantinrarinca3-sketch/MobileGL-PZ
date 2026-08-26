@@ -41,6 +41,9 @@ option(MOBILEPZ_PZF13_NULL_TEXTURE_PRODUCER_LINEAGE "Trace attach/check/draw/cle
 option(MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE "Trace every native GLES draw inside NULL-texture clear-to-detach windows and repair proven backend FBO/program desync" OFF)
 option(MOBILEPZ_PZF15_TEXTURE_COMBINER_SUBMISSION_TRACE "Trace TextureCombiner/LWJGL legacy submission from symbol resolution through native draw" OFF)
 option(MOBILEPZ_PZF16_QUAD4_SUBMISSION_FIX "Translate exact four-vertex legacy quads to a supported triangle fan before native submission" OFF)
+option(MOBILEPZ_BUG002_WFX_BLEND_FIX "Enable blending only around the exact ROUTE-CENSUS WeatherFX draw" OFF)
+option(MOBILEPZ_BUG002_WFX_FORCE_VISIBLE "Diagnostic: force the exact WeatherFX fragment family to opaque magenta" OFF)
+option(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS "Apply the PZF16 quad4 translation only to the two captured horse-compositor programs" OFF)
 option(MOBILEPZ_PERF002_PROGRAM_AWARE_TEXTURE_SYNC "Sync steady-state sampled textures only for units used by the current program" OFF)
 option(MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING "Resolve and shadow-check texture bindings only for units sampled by the current program" OFF)
 option(MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING "Restore and shadow-check sampler-object bindings only for units sampled by the current program" OFF)
@@ -511,6 +514,22 @@ if (MOBILEPZ_V1_CANDIDATE AND (NOT ANDROID OR NOT MOBILEGL_PZCOMPAT))
     message(FATAL_ERROR "MOBILEPZ_V1_CANDIDATE requires Android and MOBILEGL_PZCOMPAT")
 endif()
 
+foreach (_mobilepz_bugfix_option
+         MOBILEPZ_BUG002_WFX_BLEND_FIX
+         MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+    if (${_mobilepz_bugfix_option} AND
+        (NOT ANDROID OR NOT MOBILEGL_PZCOMPAT OR NOT MOBILEPZ_V1_CANDIDATE))
+        message(FATAL_ERROR
+            "${_mobilepz_bugfix_option} requires Android, MOBILEGL_PZCOMPAT and MOBILEPZ_V1_CANDIDATE")
+    endif()
+endforeach()
+unset(_mobilepz_bugfix_option)
+
+if (MOBILEPZ_BUG002_WFX_FORCE_VISIBLE AND NOT MOBILEPZ_BUG002_WFX_BLEND_FIX)
+    message(FATAL_ERROR
+        "MOBILEPZ_BUG002_WFX_FORCE_VISIBLE is a diagnostic extension of MOBILEPZ_BUG002_WFX_BLEND_FIX")
+endif()
+
 if (MOBILEPZ_PZF23D2_CHUNK_FRAGDEPTH_CLAMP AND
     (NOT ANDROID OR NOT MOBILEGL_PZCOMPAT OR NOT MOBILEPZ_V1_CANDIDATE))
     message(FATAL_ERROR
@@ -820,6 +839,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
         $<$<BOOL:${MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE}>:MOBILEPZ_PZF14_CLEAR_TO_DETACH_DRAW_ROUTE=1>
         $<$<BOOL:${MOBILEPZ_PZF15_TEXTURE_COMBINER_SUBMISSION_TRACE}>:MOBILEPZ_PZF15_TEXTURE_COMBINER_SUBMISSION_TRACE=1>
         $<$<BOOL:${MOBILEPZ_PZF16_QUAD4_SUBMISSION_FIX}>:MOBILEPZ_PZF16_QUAD4_SUBMISSION_FIX=1>
+        $<$<BOOL:${MOBILEPZ_BUG002_WFX_BLEND_FIX}>:MOBILEPZ_BUG002_WFX_BLEND_FIX=1>
+        $<$<BOOL:${MOBILEPZ_BUG002_WFX_FORCE_VISIBLE}>:MOBILEPZ_BUG002_WFX_FORCE_VISIBLE=1>
+        $<$<BOOL:${MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS}>:MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS=1>
         $<$<BOOL:${MOBILEPZ_PERF002_PROGRAM_AWARE_TEXTURE_SYNC}>:MOBILEPZ_PERF002_PROGRAM_AWARE_TEXTURE_SYNC=1>
         $<$<BOOL:${MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING}>:MOBILEPZ_PERF003_PROGRAM_AWARE_TEXTURE_BINDING=1>
         $<$<BOOL:${MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING}>:MOBILEPZ_PERF005_PROGRAM_AWARE_SAMPLER_BINDING=1>

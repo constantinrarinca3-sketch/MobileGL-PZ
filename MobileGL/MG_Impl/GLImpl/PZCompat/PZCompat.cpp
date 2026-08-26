@@ -7,6 +7,7 @@
 #include "../Drawing/GL_Drawing.h"
 #include "../Getter/GL_Getter.h"
 #include "../Program/GL_Program.h"
+#include "../RenderState/GL_RenderState.h"
 #include "../Texture/GL_Texture.h"
 #include "../VertexArray/GL_VertexArray.h"
 #include <MG_State/GLState/Core.h>
@@ -22,7 +23,8 @@
 #include <MG_Util/Converters/MGToGL/RenderStateEnumConverter.h>
 #endif
 #if defined(MOBILEPZ_PZF16_QUAD4_SUBMISSION_FIX) || defined(MOBILEPZ_PZF23D3_CHUNK_ALPHA_TEST_PROOF) || \
-    defined(MOBILEPZ_PZF23D4_CUSTOM_ALPHA_TEST_FAMILY)
+    defined(MOBILEPZ_PZF23D4_CUSTOM_ALPHA_TEST_FAMILY) || \
+    defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
 #include <atomic>
 #endif
 
@@ -344,6 +346,104 @@ namespace MobileGL::MG_Impl::GLImpl::PZCompat {
             return true;
         }
 
+#endif
+
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+        SharedPtr<MG_State::GLState::ProgramObject> CurrentBugFixProgram() {
+            if (!MG_State::pGLContext) return nullptr;
+            return MG_State::pGLContext->GetCurrentProgram();
+        }
+
+        Bool HasExactBugFixInterface(
+            MG_State::GLState::ProgramObject& program,
+            ::MobilePZ::Bug002Bug003::ProgramRole role) {
+            if (program.GetActiveAttributesCount() != 3 ||
+                program.GetUniformLocation("DIFFUSE") < 0 ||
+                program.GetAttributeLocation("aColor") < 0) {
+                return false;
+            }
+            if (role == ::MobilePZ::Bug002Bug003::ProgramRole::WeatherFx) {
+                return program.GetAttributeLocation("aPos") >= 0 &&
+                       program.GetAttributeLocation("aUV") >= 0;
+            }
+            if (role == ::MobilePZ::Bug002Bug003::ProgramRole::HorseQuad) {
+                return program.GetAttributeLocation("aPosition") >= 0 &&
+                       program.GetAttributeLocation("aUV1") >= 0;
+            }
+            return false;
+        }
+
+        Bool IsBugFixLogMilestone(Uint64 hits) {
+            return hits == 1 || hits == 16 || hits == 1024 || hits == 65536;
+        }
+#endif
+
+#ifdef MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS
+        Bool IsBoundedHorseQuad(GLenum mode, GLsizei count,
+                                SharedPtr<MG_State::GLState::ProgramObject>& program) {
+            if (mode != GL_QUADS || count != 4) return false;
+            program = CurrentBugFixProgram();
+            if (!program || program->GetPZBug002Bug003Role() !=
+                    ::MobilePZ::Bug002Bug003::ProgramRole::HorseQuad) {
+                return false;
+            }
+            return HasExactBugFixInterface(
+                *program, ::MobilePZ::Bug002Bug003::ProgramRole::HorseQuad);
+        }
+
+        void RecordBoundedHorseQuad(const char* route,
+                                    const MG_State::GLState::ProgramObject& program,
+                                    GLenum indexType) {
+            static std::atomic<Uint64> hits{0};
+            const Uint64 hit = hits.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (!IsBugFixLogMilestone(hit)) return;
+            MGLOG_W("MGLPZ_BUG003_HORSE_QUAD hit=%llu route=%s program=%u lifetime=%llu "
+                    "shader_fp=%016llx old_mode=0x%x new_mode=0x%x count=4 index_type=0x%x",
+                    static_cast<unsigned long long>(hit), route,
+                    program.GetExternalIndex(),
+                    static_cast<unsigned long long>(program.GetLifetimeId()),
+                    static_cast<unsigned long long>(program.GetPZBug002Bug003Fingerprint()),
+                    GL_QUADS, GL_TRIANGLE_FAN, indexType);
+        }
+#endif
+
+#ifdef MOBILEPZ_BUG002_WFX_BLEND_FIX
+        Bool SubmitWeatherFxBlendFix(GLuint start, GLuint end, GLsizei count,
+                                     GLenum type, const void* indices) {
+            if (count != 6 || type != GL_UNSIGNED_SHORT || !MG_State::pGLContext ||
+                PZV1CurrentFrontFbo() != 0) {
+                return false;
+            }
+            auto program = CurrentBugFixProgram();
+            if (!program || program->GetPZBug002Bug003Role() !=
+                    ::MobilePZ::Bug002Bug003::ProgramRole::WeatherFx ||
+                !HasExactBugFixInterface(
+                    *program, ::MobilePZ::Bug002Bug003::ProgramRole::WeatherFx)) {
+                return false;
+            }
+
+            const Bool blendWasEnabled = MG_State::pGLContext->IsCapabilityEnabled(
+                CapabilityInput::Blend);
+            if (!blendWasEnabled) GLImpl::Enable(GL_BLEND);
+            GLImpl::DrawRangeElements(
+                GL_TRIANGLES, start, end, count, type, indices);
+            if (!blendWasEnabled) GLImpl::Disable(GL_BLEND);
+
+            static std::atomic<Uint64> hits{0};
+            const Uint64 hit = hits.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (IsBugFixLogMilestone(hit)) {
+                MGLOG_W("MGLPZ_BUG002_WFX_BLEND hit=%llu program=%u lifetime=%llu "
+                        "shader_fp=%016llx fbo=0 mode=0x%x count=6 type=0x%x "
+                        "blend_before=%d blend_during=1 blend_restored=%d",
+                        static_cast<unsigned long long>(hit),
+                        program->GetExternalIndex(),
+                        static_cast<unsigned long long>(program->GetLifetimeId()),
+                        static_cast<unsigned long long>(program->GetPZBug002Bug003Fingerprint()),
+                        GL_TRIANGLES, type, blendWasEnabled ? 1 : 0,
+                        blendWasEnabled ? 1 : 0);
+            }
+            return true;
+        }
 #endif
 
 #ifdef MOBILEPZ_PZF15_TEXTURE_COMBINER_SUBMISSION_TRACE
@@ -1687,6 +1787,14 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawArrays", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS
+        SharedPtr<MG_State::GLState::ProgramObject> horseProgram;
+        if (IsBoundedHorseQuad(mode, count, horseProgram)) {
+            RecordBoundedHorseQuad("DrawArrays", *horseProgram, 0);
+            GLImpl::DrawArrays(GL_TRIANGLE_FAN, first, count);
+            return true;
+        }
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchArrays(first, count)) {
@@ -1727,6 +1835,14 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawElements", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS
+        SharedPtr<MG_State::GLState::ProgramObject> horseProgram;
+        if (IsBoundedHorseQuad(mode, count, horseProgram)) {
+            RecordBoundedHorseQuad("DrawElements", *horseProgram, type);
+            GLImpl::DrawElements(GL_TRIANGLE_FAN, count, type, indices);
+            return true;
+        }
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchElements(count, type, indices)) {
@@ -1768,6 +1884,21 @@ void main() {
         PZF23D4PrepareCustomProgramDraw("DrawRangeElements", mode, count);
 #endif
         State& state = CurrentState();
+#ifdef MOBILEPZ_BUG002_WFX_BLEND_FIX
+        if (mode == GL_TRIANGLES &&
+            SubmitWeatherFxBlendFix(start, end, count, type, indices)) {
+            return true;
+        }
+#endif
+#ifdef MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS
+        SharedPtr<MG_State::GLState::ProgramObject> horseProgram;
+        if (IsBoundedHorseQuad(mode, count, horseProgram)) {
+            RecordBoundedHorseQuad("DrawRangeElements", *horseProgram, type);
+            GLImpl::DrawRangeElements(
+                GL_TRIANGLE_FAN, start, end, count, type, indices);
+            return true;
+        }
+#endif
 #ifdef MOBILEPZ_V1_CANDIDATE
         if (ShouldConvertPZV1WorldMapQuadBatch(mode, count) &&
             SubmitPZV1QuadBatchRangeElements(

@@ -15,6 +15,9 @@
 #ifdef MOBILEPZ_V1_CANDIDATE
 #include <MG_Util/PZV1/PZV1MapCompat.h>
 #endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+#include <MG_Util/PZV1/PZBug002Bug003Program.h>
+#endif
 
 namespace MobileGL::MG_State::GLState {
     // The link job. Only ever held by SharedPtr here, so a forward declaration is enough -
@@ -1135,6 +1138,19 @@ namespace MobileGL::MG_State::GLState {
             return m_pzV1MapProgramRole;
         }
 #endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+        void SetPZBug002Bug003Identity(
+            ::MobilePZ::Bug002Bug003::ProgramRole role, Uint64 fingerprint) {
+            m_pzBug002Bug003Role = role;
+            m_pzBug002Bug003Fingerprint = fingerprint;
+        }
+        ::MobilePZ::Bug002Bug003::ProgramRole GetPZBug002Bug003Role() const {
+            return m_pzBug002Bug003Role;
+        }
+        Uint64 GetPZBug002Bug003Fingerprint() const {
+            return m_pzBug002Bug003Fingerprint;
+        }
+#endif
 
     private:
         // ---- The one and only join gate for link output (P1 invariant I5) ----
@@ -1229,6 +1245,11 @@ namespace MobileGL::MG_State::GLState {
 #ifdef MOBILEPZ_V1_CANDIDATE
         ::MobilePZ::V1::MapProgramRole m_pzV1MapProgramRole =
             ::MobilePZ::V1::MapProgramRole::None;
+#endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+        ::MobilePZ::Bug002Bug003::ProgramRole m_pzBug002Bug003Role =
+            ::MobilePZ::Bug002Bug003::ProgramRole::None;
+        Uint64 m_pzBug002Bug003Fingerprint = 0;
 #endif
         // The attach lists are mutated only in Link()'s GL-thread prologue, which is why
         // glGetAttachedShaders / GL_ATTACHED_SHADERS / the orphan-shader sweep need no join.

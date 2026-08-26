@@ -24,6 +24,9 @@
 #ifdef MOBILEPZ_V1_CANDIDATE
 #include <MG_Util/PZV1/PZV1MapCompat.h>
 #endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+#include <MG_Util/PZV1/PZBug002Bug003Program.h>
+#endif
 #ifdef MOBILEPZ_PZF7_UNIFORM_TO_NATIVE
 #include <MG_Backend/DirectGLES/PZF7UniformToNativeState.h>
 #endif
@@ -46,6 +49,30 @@ namespace MobileGL::MG_Impl::GLImpl {
             }
             program.SetPZV1MapProgramRole(
                 ::MobilePZ::V1::ClassifyMapProgram(vertexHash, fragmentHash));
+        }
+    } // namespace
+#endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+    namespace {
+        void TagPZBug002Bug003Program(MG_State::GLState::ProgramObject& program) {
+            Uint64 fingerprint = 1469598103934665603ull;
+            for (const auto& shader : program.GetAttachedShaders()) {
+                if (!shader) continue;
+                ::MobilePZ::Bug002Bug003::HashShader(
+                    fingerprint, shader->GetShaderStage(), shader->GetShaderSource());
+            }
+            const auto role =
+                ::MobilePZ::Bug002Bug003::ClassifyProgram(fingerprint);
+            program.SetPZBug002Bug003Identity(role, fingerprint);
+            if (role != ::MobilePZ::Bug002Bug003::ProgramRole::None) {
+                const char* roleName = role ==
+                    ::MobilePZ::Bug002Bug003::ProgramRole::WeatherFx
+                        ? "WEATHER_FX" : "HORSE_QUAD";
+                MGLOG_W("MGLPZ_BUGFIX_PROGRAM role=%s program=%u lifetime=%llu shader_fp=%016llx",
+                        roleName, program.GetExternalIndex(),
+                        static_cast<unsigned long long>(program.GetLifetimeId()),
+                        static_cast<unsigned long long>(fingerprint));
+            }
         }
     } // namespace
 #endif
@@ -1261,6 +1288,9 @@ namespace MobileGL::MG_Impl::GLImpl {
         programObject->Link(!allowVSOnlyPrograms);
 #ifdef MOBILEPZ_V1_CANDIDATE
         TagPZV1MapProgram(*programObject);
+#endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+        TagPZBug002Bug003Program(*programObject);
 #endif
 #ifdef MOBILEPZ_SL1_SYNC_SHADER_LIFECYCLE
         PzLifecycleLogLink(program, *programObject);
@@ -3319,6 +3349,9 @@ namespace MobileGL::MG_Impl::GLImpl {
                 programObject->Link(false);
 #ifdef MOBILEPZ_V1_CANDIDATE
                 TagPZV1MapProgram(*programObject);
+#endif
+#if defined(MOBILEPZ_BUG002_WFX_BLEND_FIX) || defined(MOBILEPZ_BUG003_HORSE_BOUNDED_QUADS)
+                TagPZBug002Bug003Program(*programObject);
 #endif
                 // glDetachShader defers the removal to the next link, so the program keeps
                 // the shader object it was built from while no longer reporting it attached.
