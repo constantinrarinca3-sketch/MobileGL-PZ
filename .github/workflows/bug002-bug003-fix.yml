@@ -32,9 +32,6 @@ jobs:
           sudo apt-get install -y ninja-build
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
 
-      - name: Refresh generated glslang source list
-        working-directory: 3rdparty/glslang
-        run: python3 update_glslang_sources.py
 
       - name: Build ${{ matrix.variant }}
         run: |
