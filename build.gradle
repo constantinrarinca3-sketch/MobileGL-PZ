@@ -1,0 +1,63 @@
+apply plugin: 'com.android.library'
+
+def mobileGlLogActiveLevel = {
+    (rootProject.findProperty('mobilegl.logLevel') ?: System.getenv('MOBILEGL_LOG_ACTIVE_LEVEL') ?: 'MOBILEGL_LOG_LEVEL_INFO') as String
+}
+def standalonePluginBuild = rootProject.name == 'MobileGLPlugin'
+
+android {
+    namespace 'top.mobilegl.mobilegl'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DMOBILEGL_LOG_ACTIVE_LEVEL=${mobileGlLogActiveLevel()}"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        proguard {
+            minifyEnabled true
+            initWith debug
+        }
+        fordebug {
+            debuggable true
+        }
+    }
+    if (standalonePluginBuild) {
+        flavorDimensions 'profile'
+        productFlavors {
+            plugin {
+                dimension 'profile'
+            }
+            trace {
+                dimension 'profile'
+                externalNativeBuild {
+                    cmake {
+                        arguments '-DMOBILEGL_TRACE_ANGLE_VARIANTS=ON'
+                    }
+                }
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    ndkVersion '27.3.13750724'
+}

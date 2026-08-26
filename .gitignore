@@ -1,0 +1,13 @@
+# Builduri locale sau produse de GitHub Actions
+/build-ci/
+/build-*/
+/ci-output/
+
+# Biblioteci și simboluri generate
+*.so
+*.so.dbg
+
+# Fișiere temporare uzuale
+*.log
+*.tmp
+

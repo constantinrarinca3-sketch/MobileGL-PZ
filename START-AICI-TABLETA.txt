@@ -1,0 +1,17 @@
+MOBILEGL PZ OPT-LAB - START AICI
+
+Acesta este un ajutor de compilare, nu un APK nou.
+
+1. Extrage continutul pachetului TABLET-BUILDER peste radacina sursei exacte 022.
+2. Pune sursa intr-un repository GitHub privat (se face o singura data).
+3. In GitHub deschide Actions > Build MobileGL PZ OPT-LAB > Run workflow.
+4. Alege NOLTO pentru incercarile rapide sau THINLTO pentru buildul final.
+5. Descarca Artifact. Biblioteca se afla in result/libMobileGLPZ.so.
+
+Instructiunile complete sunt in BUILD-DE-PE-TABLETA-RO.md.
+
+IMPORTANT:
+- Nu inlocui APK-ul ZomDroid.
+- Pastreaza un backup al ultimului libMobileGLPZ.so functional.
+- Nu activa global PZF16 pentru quad-uri; acea varianta a corupt interfata.
+

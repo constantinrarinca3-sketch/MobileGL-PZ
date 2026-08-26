@@ -1,0 +1,116 @@
+name: Build MobileGL PZ OPT-LAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "NOLTO pentru teste rapide; THINLTO pentru buildul final"
+        required: true
+        default: NOLTO
+        type: choice
+        options:
+          - NOLTO
+          - THINLTO
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobilegl-pz-opt-lab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ inputs.variant }} / arm64-v8a
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Descarcă sursa exactă
+        uses: actions/checkout@v6
+
+      - name: Instalează NDK și CMake exacte
+        uses: android-actions/setup-android@v4
+
+      - name: Instalează versiunile cerute de proiect
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.3.13750724" "cmake;3.22.1"
+
+      - name: Verifică sursa OPT-LAB V3-022
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh
+
+      - name: Compilează și verifică libMobileGLPZ.so
+        shell: bash
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.3.13750724
+          MGLPZ_BUILD_JOBS: "4"
+        run: |
+          set -euo pipefail
+
+          export PATH="${ANDROID_SDK_ROOT}/cmake/3.22.1/bin:${PATH}"
+          mkdir -p ci-output/result
+
+          bash scripts/build-mobilegl-pz-opt-lab-android.sh \
+            "${{ inputs.variant }}" \
+            "${GITHUB_WORKSPACE}/build-ci" \
+            2>&1 | tee ci-output/build.log
+
+          built_so="${GITHUB_WORKSPACE}/build-ci/libMobileGLPZ.so"
+          test -f "${built_so}"
+
+          cp "${built_so}" ci-output/result/libMobileGLPZ.so
+
+          tool_bin="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "${tool_bin}/llvm-strip" --strip-all ci-output/result/libMobileGLPZ.so
+
+          bash scripts/verify-mobilegl-pz-opt-lab-v3-022.sh \
+            ci-output/result/libMobileGLPZ.so \
+            | tee ci-output/result/VERIFY.txt
+
+          if "${tool_bin}/llvm-readelf" -d ci-output/result/libMobileGLPZ.so \
+            | grep -Fq 'libc++_shared.so'; then
+            echo "EROARE: buildul depinde de libc++_shared.so, deși proiectul cere c++_static." >&2
+            exit 1
+          fi
+
+          "${tool_bin}/llvm-readelf" -h -d -n \
+            ci-output/result/libMobileGLPZ.so \
+            > ci-output/result/ELF-INFO.txt
+          "${tool_bin}/llvm-readelf" -l \
+            ci-output/result/libMobileGLPZ.so \
+            > ci-output/result/ELF-PROGRAM-HEADERS.txt
+
+          source_id="$(sed -n 's/^OPT_LAB_SOURCE_ID=//p' ci-output/build.log | tail -n 1)"
+          build_id="$(sed -n 's/^OPT_LAB_BUILD_ID=//p' ci-output/build.log | tail -n 1)"
+
+          {
+            echo "MobileGL PZ OPT-LAB V3-022"
+            echo "variant=${{ inputs.variant }}"
+            echo "abi=arm64-v8a"
+            echo "android_api=26"
+            echo "ndk=27.3.13750724"
+            echo "cmake=3.22.1"
+            echo "git_commit=${GITHUB_SHA}"
+            echo "source_id=${source_id}"
+            echo "build_id=${build_id}"
+          } > ci-output/result/BUILD-INFO.txt
+
+          (
+            cd ci-output/result
+            sha256sum libMobileGLPZ.so > SHA256SUMS.txt
+          )
+
+      - name: Încarcă rezultatul sau jurnalul de eroare
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MobileGLPZ-${{ inputs.variant }}-run-${{ github.run_number }}
+          path: ci-output/
+          if-no-files-found: warn
+          retention-days: 30
